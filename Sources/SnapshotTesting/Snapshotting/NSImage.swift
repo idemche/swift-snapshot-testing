@@ -22,7 +22,7 @@ extension Diffing where Value == NSImage {
         : "Newly-taken snapshot@\(new.size) does not match reference@\(old.size)."
       return (
         message,
-        [XCTAttachment(image: old), XCTAttachment(image: new), XCTAttachment(image: difference)]
+        [Attachment(attachmentImage: old), Attachment(attachmentImage: new), Attachment(attachmentImage: difference)]
       )
     }
   }

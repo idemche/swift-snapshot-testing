@@ -8,6 +8,8 @@ public var diffTool: String? = nil
 /// Whether or not to record all new references.
 public var isRecording = false
 
+private let fileWriteQueue: DispatchQueue = .init(label: "co.pointfree.SnapshotTesting.write", qos: .default, attributes: .concurrent)
+
 /// Whether or not to record all new references.
 /// Due to a name clash in Xcode 12, this has been renamed to `isRecording`.
 @available(*, deprecated, renamed: "isRecording")
@@ -169,6 +171,7 @@ public func verifySnapshot<Value, Format>(
   timeout: TimeInterval = 5,
   file: StaticString = #file,
   testName: String = #function,
+  isSaveToDiskEnabled: Bool = false,
   line: UInt = #line
   )
   -> String? {
@@ -184,6 +187,8 @@ public func verifySnapshot<Value, Format>(
           .deletingLastPathComponent()
           .appendingPathComponent("__Snapshots__")
           .appendingPathComponent(fileName)
+      let currentTestRunDirectoryUrl = snapshotDirectoryUrl
+        .appendingPathComponent("TestRunResults", isDirectory: true)
 
       let identifier: String
       if let name = name {
@@ -284,6 +289,25 @@ public func verifySnapshot<Value, Format>(
           }
         }
         #endif
+        
+        var isDirectory: ObjCBool = true
+        if !fileManager.fileExists(atPath: currentTestRunDirectoryUrl.path, isDirectory: &isDirectory) {
+          try fileManager.createDirectory(at: currentTestRunDirectoryUrl, withIntermediateDirectories: true)
+        }
+
+        for attachment in attachments where isSaveToDiskEnabled {
+          fileWriteQueue.async {
+            if let attachmentName = attachment.name, let image = attachment.attachmentImage, let data = image.pngData() {
+              let currentTestRunFileUrl = currentTestRunDirectoryUrl
+                .appendingPathComponent("\(attachmentName)_\(testName).\(identifier)")
+                .appendingPathExtension(snapshotting.pathExtension ?? "")
+              if fileManager.fileExists(atPath: currentTestRunFileUrl.path) {
+                try? fileManager.removeItem(at: currentTestRunFileUrl)
+              }
+              try? data.write(to: currentTestRunFileUrl)
+            }
+          }
+        }
       }
 
       let diffMessage = diffTool
